@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Request, Body, HTTPException, status
-from models.farmModel import Contacts
+from jitfarm_api.models.farmModel import Contacts
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from utils import log_error, get_current_user, permission_required
-from services.contact import ContactService
+from jitfarm_api.utils import log_error, get_current_user, permission_required
+from jitfarm_api.services.contact import ContactService
 from typing import List, Dict, Any
 
 contact_router = APIRouter(prefix="", tags=['Contact'])

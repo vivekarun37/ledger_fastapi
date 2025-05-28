@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException, status
-from models.farmModel import Crops
-from services.crop import CropService
-from utils import log_error,permission_required,get_current_user
+from jitfarm_api.models.farmModel import Crops
+from jitfarm_api.services.crop import CropService
+from jitfarm_api.utils import log_error, permission_required, get_current_user
 from typing import Dict, List, Optional
+import json
 
 crop_router = APIRouter(prefix="", tags=['Crop'])
 

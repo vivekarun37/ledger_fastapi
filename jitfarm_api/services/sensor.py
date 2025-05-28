@@ -5,6 +5,9 @@ from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
 import traceback
 import inspect
+from fastapi import HTTPException, status
+from jitfarm_api.models.farmModel import SensorData
+import json
 
 class SensorService:
     def __init__(self, db_farm, db_logs, db_error_log=None):

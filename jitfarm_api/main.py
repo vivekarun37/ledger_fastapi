@@ -1,26 +1,31 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from routes.client import client_router
-from routes.contact import contact_router
-from routes.crop import crop_router
-from routes.field import field_router
-from routes.sensor import sensor_router
-from routes.user import user_router
-from routes.form import form_router
-from routes.device import device_router
-from routes.custom_field import field_template_router
-from routes.role import role_router
-from routes.coa import coa_router
-from routes.transaction import transaction_router
-from config import Config
+from jitfarm_api.routes.client import client_router
+from jitfarm_api.routes.contact import contact_router
+from jitfarm_api.routes.crop import crop_router
+from jitfarm_api.routes.field import field_router
+from jitfarm_api.routes.sensor import sensor_router
+from jitfarm_api.routes.user import user_router
+from jitfarm_api.routes.form import form_router
+from jitfarm_api.routes.device import device_router
+from jitfarm_api.routes.custom_field import field_template_router
+from jitfarm_api.routes.role import role_router
+from jitfarm_api.routes.coa import coa_router
+from jitfarm_api.routes.transaction import transaction_router
+from jitfarm_api.routes.ledger import ledger_router
+from jitfarm_api.config import Config
+import logging
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 async def connectToDatabase(collection_name):
     # Connect to MongoDB using the full connection string
-    client = MongoClient(Config.MONGODB_URI, tlsAllowInvalidCertificates=True)
+    client = AsyncIOMotorClient(Config.MONGODB_URI, tlsAllowInvalidCertificates=True)
     # Get the database
     db = client[Config.MONGODB_DB_NAME]
     return db
@@ -46,6 +51,7 @@ async def lifespan(app: FastAPI):
     app.permissions = db.permissions
     app.accounts = db.accounts
     app.transactions = db.transactions
+    app.ledger = db.ledger
     
     print("startup has begun!!")
     yield
@@ -98,12 +104,17 @@ app.include_router(crop_router)
 app.include_router(field_router)
 app.include_router(sensor_router)
 app.include_router(device_router)
-app.include_router(user_router)
+app.include_router(user_router, prefix="/user")
 app.include_router(form_router)
 app.include_router(field_template_router)
 app.include_router(role_router)
 app.include_router(coa_router)
 app.include_router(transaction_router)
+app.include_router(ledger_router)
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to JIT Farm API"}
 
 if __name__ == "__main__":
     import uvicorn

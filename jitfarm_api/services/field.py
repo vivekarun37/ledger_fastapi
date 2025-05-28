@@ -1,16 +1,17 @@
 from bson import ObjectId
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from pymongo.errors import PyMongoError
 from datetime import datetime
-from models.farmModel import Fields
+from jitfarm_api.models.farmModel import Field
 from typing import Dict, List, Optional, Any, Tuple
+import json
 
 class FieldService:
     def __init__(self, db_client):
         self.db_fields = db_client.fields
         self.db = db_client
 
-    async def add_field(self, field: Fields) -> Tuple[Dict[str, str], Optional[Exception]]:
+    async def add_field(self, field: Field) -> Tuple[Dict[str, str], Optional[Exception]]:
         try:
             field_data = field.dict()
             field_data["created_dt"] = datetime.utcnow().isoformat()

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException
-from models.farmModel import FieldTemplate
-from services.custom_field import FieldTemplateService
+from jitfarm_api.models.farmModel import FieldTemplate
+from jitfarm_api.services.custom_field import FieldTemplateService
 from typing import List, Optional
-from utils import log_error,get_current_user,permission_required 
+from jitfarm_api.utils import log_error, get_current_user, permission_required 
 
 field_template_router = APIRouter(prefix="", tags=['FieldTemplate'])
 

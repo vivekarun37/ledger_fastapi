@@ -1,9 +1,11 @@
 from bson import ObjectId
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from pymongo.errors import PyMongoError
 from datetime import datetime
-from models.farmModel import COAccount
+from jitfarm_api.models.farmModel import COAccount
 from typing import Dict, List, Optional, Any
+from motor.motor_asyncio import AsyncIOMotorCollection
+import json
 
 class COAccountService:
     def __init__(self, app):
@@ -16,7 +18,7 @@ class COAccountService:
             account_data = account.dict()
             
             # Check if account code already exists for this client
-            existing_account = self.db_accounts.find_one({
+            existing_account = await self.db_accounts.find_one({
                 "client_id": account_data["client_id"],
                 "account_code": account_data["account_code"]
             })
@@ -27,7 +29,7 @@ class COAccountService:
                     detail="Account code already exists. Please use a different code."
                 )
             
-            result = self.db_accounts.insert_one(account_data)
+            result = await self.db_accounts.insert_one(account_data)
             return {
                 "status": "success", 
                 "message": "Account added successfully", 
@@ -42,11 +44,11 @@ class COAccountService:
 
     async def get_accounts(self, client_id: str) -> List[Dict[str, Any]]:
         try:
-            accounts = list(self.db_accounts.find({"client_id": client_id}))
-
-            for account in accounts:
+            cursor = self.db_accounts.find({"client_id": client_id})
+            accounts = []
+            async for account in cursor:
                 account["_id"] = str(account["_id"])
-            
+                accounts.append(account)
             return accounts
 
         except PyMongoError as e:
@@ -59,7 +61,7 @@ class COAccountService:
             if not ObjectId.is_valid(account_id):
                 raise HTTPException(status_code=400, detail="Invalid account ID format")
 
-            existing_account = self.db_accounts.find_one({"_id": ObjectId(account_id)})
+            existing_account = await self.db_accounts.find_one({"_id": ObjectId(account_id)})
 
             if not existing_account:
                 raise HTTPException(status_code=404, detail="Account not found")
@@ -76,7 +78,7 @@ class COAccountService:
                 child_data = account_data["child_account"]
                 
                 # Check if child account code already exists
-                duplicate_check = self.db_accounts.find_one({
+                duplicate_check = await self.db_accounts.find_one({
                     "client_id": existing_account["client_id"],
                     "account_code": child_data.get("account_code")
                 })
@@ -107,11 +109,11 @@ class COAccountService:
                 }
                 
                 # Insert the child account
-                child_result = self.db_accounts.insert_one(child_account)
+                child_result = await self.db_accounts.insert_one(child_account)
                 child_id = str(child_result.inserted_id)
                 
                 # Update the parent's children array
-                self.db_accounts.update_one(
+                await self.db_accounts.update_one(
                     {"_id": ObjectId(account_id)},
                     {"$push": {"children": child_id}}
                 )
@@ -126,7 +128,7 @@ class COAccountService:
             
             # Regular account update logic
             if "account_code" in account_data and account_data["account_code"] != existing_account.get("account_code"):
-                duplicate_check = self.db_accounts.find_one({
+                duplicate_check = await self.db_accounts.find_one({
                     "_id": {"$ne": ObjectId(account_id)},
                     "client_id": existing_account["client_id"],
                     "account_code": account_data.get("account_code")
@@ -151,7 +153,7 @@ class COAccountService:
                 "updated_dt": datetime.utcnow().isoformat(),
             }
 
-            self.db_accounts.update_one({"_id": ObjectId(account_id)}, {"$set": update_data})
+            await self.db_accounts.update_one({"_id": ObjectId(account_id)}, {"$set": update_data})
 
             return {"status": "success", "message": "Account updated successfully"}
         
@@ -167,7 +169,7 @@ class COAccountService:
             if not ObjectId.is_valid(account_id):
                 raise HTTPException(status_code=400, detail="Invalid account ID format")
 
-            account_record = self.db_accounts.find_one({"_id": ObjectId(account_id)})
+            account_record = await self.db_accounts.find_one({"_id": ObjectId(account_id)})
 
             if not account_record:
                 raise HTTPException(status_code=404, detail="Account not found")
@@ -175,7 +177,7 @@ class COAccountService:
             # TODO: Add logic to check if account is in use before deleting
             # For example, check if there are any journal entries or transactions referencing this account
             
-            self.db_accounts.delete_one({"_id": ObjectId(account_id)})
+            await self.db_accounts.delete_one({"_id": ObjectId(account_id)})
             
             return {
                 "status": "success",
@@ -190,76 +192,13 @@ class COAccountService:
 
     async def active_accounts(self, client_id: str) -> List[Dict[str, Any]]:
         try:
-            accounts = list(self.db_accounts.find({"client_id": client_id, "is_active": True}))
-
-            for account in accounts:
+            cursor = self.db_accounts.find({"client_id": client_id, "is_active": True})
+            accounts = []
+            async for account in cursor:
                 account["_id"] = str(account["_id"])
-            
+                accounts.append(account)
             return accounts
 
-        except PyMongoError as e:
-            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-
-    async def get_account_ledger(self, account_id: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Dict[str, Any]:
-        try:
-            if not ObjectId.is_valid(account_id):
-                raise HTTPException(status_code=400, detail="Invalid account ID format")
-
-            # Get account details
-            account = self.db_accounts.find_one({"_id": ObjectId(account_id)})
-            if not account:
-                raise HTTPException(status_code=404, detail="Account not found")
-
-            # Build query for transactions
-            query = {"account_id": account_id}
-            if start_date:
-                query["date"] = {"$gte": start_date}
-            if end_date:
-                if "date" in query:
-                    query["date"]["$lte"] = end_date
-                else:
-                    query["date"] = {"$lte": end_date}
-
-            # Get transactions for this account
-            transactions = list(self.transactions.find(query).sort("date", 1))
-
-            # Calculate running balance
-            running_balance = 0
-            for transaction in transactions:
-                transaction["_id"] = str(transaction["_id"])
-                amount = float(transaction.get("amount", 0))
-                
-                # Adjust balance based on transaction type and account type
-                if transaction.get("type") == "debit":
-                    if account.get("type") in ["Asset", "Expense"]:
-                        running_balance += amount
-                    else:
-                        running_balance -= amount
-                else:  # credit
-                    if account.get("type") in ["Asset", "Expense"]:
-                        running_balance -= amount
-                    else:
-                        running_balance += amount
-                
-                transaction["running_balance"] = running_balance
-
-            return {
-                "status": "success",
-                "account": {
-                    "id": str(account["_id"]),
-                    "code": account.get("account_code"),
-                    "name": account.get("account_name"),
-                    "type": account.get("account_type"),
-                    "subtype": account.get("account_subtype")
-                },
-                "transactions": transactions,
-                "current_balance": running_balance
-            }
-
-        except HTTPException as e:
-            raise e
         except PyMongoError as e:
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
         except Exception as e:

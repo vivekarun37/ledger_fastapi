@@ -1,10 +1,12 @@
 from pymongo import MongoClient
-from models.farmModel import Clients, Users  # Import the Users model here
+from jitfarm_api.models.farmModel import Clients, Users
 from bson import ObjectId
 from fastapi import HTTPException, status
-from services.user import UserService
-from services.role import RoleService
+from jitfarm_api.services.user import UserService
+from jitfarm_api.services.role import RoleService
 from datetime import datetime
+from pymongo.errors import PyMongoError
+import json
 
 class ClientService:
     def __init__(self, db):

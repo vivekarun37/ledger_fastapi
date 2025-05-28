@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException
-from models.farmModel import Device
-from services.device import DeviceService
+from jitfarm_api.models.farmModel import Device
+from jitfarm_api.services.device import DeviceService
 from typing import Dict, List, Optional
-from utils import log_error,get_current_user,permission_required
+from jitfarm_api.utils import log_error, get_current_user, permission_required
 
 device_router = APIRouter(prefix="", tags=['Device'])
 

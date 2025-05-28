@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Request, HTTPException, status, Depends
-from models.farmModel import Clients
-from services.client import ClientService
+from jitfarm_api.models.farmModel import Clients
+from jitfarm_api.services.client import ClientService
 import json
-from utils import log_error,get_current_user,permission_required
+from jitfarm_api.utils import log_error, get_current_user, permission_required
 
 
 client_router = APIRouter(prefix="", tags=['Client'])

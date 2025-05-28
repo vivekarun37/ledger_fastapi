@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException, status
-from models.farmModel import Transaction  # You'll need to create this model class
-from services.transaction import TransactionService
-from utils import log_error, permission_required, get_current_user, additional_permissions_required
+from jitfarm_api.models.farmModel import Transaction  # You'll need to create this model class
+from jitfarm_api.services.transaction import TransactionService
+from jitfarm_api.utils import log_error, permission_required, get_current_user, additional_permissions_required
 from typing import Dict, List, Optional
 
 transaction_router = APIRouter(prefix="", tags=['Transactions'])

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException, status
-from models.farmModel import COAccount  # This should likely be renamed to match new naming
-from services.coa import COAccountService
-from utils import log_error, permission_required, get_current_user, additional_permissions_required
+from jitfarm_api.models.farmModel import COAccount  # This should likely be renamed to match new naming
+from jitfarm_api.services.coa import COAccountService
+from jitfarm_api.utils import log_error, permission_required, get_current_user, additional_permissions_required
 from typing import Dict, List, Optional
 from datetime import datetime
 
@@ -161,41 +161,6 @@ async def delete_account(
         raise e
     except Exception as e:
         log_error(request.app, request, f"Unexpected error in delete_account for account_id: {account_id}", e, {"account_id": account_id})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred"
-        )
-
-@coa_router.get("/account_ledger/{account_id}")
-async def get_account_ledger(
-    request: Request,
-    account_id: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    account_service: COAccountService = Depends(get_account_service),
-    user: dict = Depends(get_current_user),
-    permission: bool = Depends(permission_required("Account", "read")),
-    additional_permission: bool = Depends(additional_permissions_required("Account", "COA", "read"))
-):
-    try:
-        if permission or additional_permission:
-            # Convert dates if provided
-            start_date_obj = datetime.fromisoformat(start_date) if start_date else None
-            end_date_obj = datetime.fromisoformat(end_date) if end_date else None
-            
-            result = await account_service.get_account_ledger(account_id, start_date_obj, end_date_obj)
-            return result
-        else:
-            log_error(request.app, request, "Permission denied for get_account_ledger", None, {"account_id": account_id})
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to view account ledger"
-            )
-    except HTTPException as e:
-        log_error(request.app, request, f"HTTP error in get_account_ledger: {e.detail}", e, {"account_id": account_id})
-        raise e
-    except Exception as e:
-        log_error(request.app, request, "Unexpected error in get_account_ledger", e, {"account_id": account_id})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred"

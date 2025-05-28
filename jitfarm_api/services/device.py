@@ -1,9 +1,10 @@
 from bson import ObjectId
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from pymongo.errors import PyMongoError
 from datetime import datetime
-from models.farmModel import Device
+from jitfarm_api.models.farmModel import Device
 from typing import Dict, List, Optional, Any
+import json
 
 class DeviceService:
     def __init__(self, db_client):

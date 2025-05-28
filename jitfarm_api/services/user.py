@@ -1,14 +1,20 @@
 import bcrypt
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
 from bson import ObjectId
 import traceback
 import inspect
 from datetime import datetime
-from utils import create_access_token, decode_token
+from jitfarm_api.utils import create_access_token, decode_token
 from datetime import timedelta
 import hashlib
+from pymongo.errors import PyMongoError
+from jitfarm_api.models.farmModel import Users
+from motor.motor_asyncio import AsyncIOMotorCollection
+import json
+import logging
 
+logger = logging.getLogger(__name__)
 
 class UserService:
     def __init__(self, db_users, db_clients, db_logs=None, db_error_log=None):
@@ -20,41 +26,41 @@ class UserService:
     def hash_password(self, password: str) -> str:
         # Use a simple MD5 hash for testing
         hashed = hashlib.md5(password.encode()).hexdigest()
-        print(f"Hashing password: result={hashed}")
+        logger.info(f"Hashing password: result={hashed}")
         return hashed
 
     def verify_password(self, password: str, hashed_password: str) -> bool:
         computed_hash = self.hash_password(password)
-        print(f"Verifying password: stored={hashed_password}, computed={computed_hash}")
+        logger.info(f"Verifying password: stored={hashed_password}, computed={computed_hash}")
         return computed_hash == hashed_password
 
     async def authenticate_user(self, user_name: str, password: str):
         try:
-            print(f"Authenticating user: {user_name}")
+            logger.info(f"Authenticating user: {user_name}")
             if not user_name or not password:
-                print("Username or password is empty")
+                logger.warning("Username or password is empty")
                 return {"status": "fail", "message": "Username and password are required"}
 
             # Use exact match with case-insensitive collation instead of regex
             try:
-                found_user = self.db_users.find_one(
+                found_user = await self.db_users.find_one(
                     {"user_name": user_name},
                     collation={"locale": "en", "strength": 2}  # Case-insensitive
                 )
-                print(f"Found user: {found_user}")
+                logger.info(f"Found user: {found_user}")
             except Exception as db_error:
-                print(f"Database error: {str(db_error)}")
+                logger.error(f"Database error: {str(db_error)}")
                 raise Exception(f"Database error: {str(db_error)}")
             
             if not found_user:
-                print("User not found")
+                logger.warning("User not found")
                 return {"status": "fail", "message": "Invalid username or password"}
                 
             if not self.verify_password(password, found_user["password"]):
-                print("Password verification failed")
+                logger.warning("Password verification failed")
                 return {"status": "fail", "message": "Invalid username or password"}
         
-            print("User authenticated successfully")
+            logger.info("User authenticated successfully")
             
             # Get client information if available
             client_id = found_user.get("client_id", None)
@@ -65,11 +71,11 @@ class UserService:
                     # Ensure client_id is an ObjectId if it's a string
                     if isinstance(client_id, str):
                         client_id = ObjectId(client_id)
-                    find_client = self.db_clients.find_one({"_id": client_id})
+                    find_client = await self.db_clients.find_one({"_id": client_id})
                     client_name = find_client.get("name", None) if find_client else None
                     client_code = find_client.get("client_code", None) if find_client else None
                 except Exception as client_error:
-                    print(f"Error fetching client info: {str(client_error)}")
+                    logger.error(f"Error fetching client info: {str(client_error)}")
                     # Don't fail authentication if client info can't be fetched
                     pass
 
@@ -98,7 +104,7 @@ class UserService:
                     refresh=True
                 )
             except Exception as token_error:
-                print(f"Error creating tokens: {str(token_error)}")
+                logger.error(f"Error creating tokens: {str(token_error)}")
                 raise Exception(f"Error creating authentication tokens: {str(token_error)}")
             
             return {
@@ -117,14 +123,14 @@ class UserService:
             }
         
         except Exception as e:
-            print(f"Error in authenticate_user: {str(e)}")
-            print(traceback.format_exc())
+            logger.error(f"Error in authenticate_user: {str(e)}")
+            logger.error(traceback.format_exc())
             raise e
 
     async def add_user(self, user_data):
         try:
             # Check if user already exists (case-insensitive search)
-            existing_user = self.db_users.find_one({
+            existing_user = await self.db_users.find_one({
                 "client_id": user_data.client_id,
                 "user_name": {"$regex": f"^{user_data.user_name}$", "$options": "i"}
             })
@@ -152,10 +158,10 @@ class UserService:
                 new_user["role_name"] = user_data.role_name
                 new_user["role"] = user_data.role
             
+            result = await self.db_users.insert_one(new_user)
             
-            result = self.db_users.insert_one(new_user)
-            
-            self.db_logs.insert_one({
+            if self.db_logs:
+                await self.db_logs.insert_one({
                     "type": "user_created", 
                     "user": user_data.user_name,
                     "created_by": user_data.created_by,
@@ -175,8 +181,7 @@ class UserService:
             })
             
             users_list = []
-
-            for user in cursor:
+            async for user in cursor:
                 user["_id"] = str(user["_id"])
                 users_list.append(user)
 
@@ -199,7 +204,7 @@ class UserService:
                 return {"status": "fail", "message": "Invalid user ID format"}
                 
             # Get the existing user
-            existing_user = self.db_users.find_one({"_id": ObjectId(user_id)})
+            existing_user = await self.db_users.find_one({"_id": ObjectId(user_id)})
             if not existing_user:
                 return {"status": "fail", "message": "User not found"}
                 
@@ -214,7 +219,7 @@ class UserService:
                 update_data.pop("password", None)
                 
             # Update user
-            result = self.db_users.update_one(
+            result = await self.db_users.update_one(
                 {"_id": ObjectId(user_id)},
                 {"$set": update_data}
             )
@@ -223,8 +228,8 @@ class UserService:
                 return {"status": "fail", "message": "No changes made"}
                 
             # Log the update if logging is enabled
-            if self.db_logs is not None:
-                self.db_logs.insert_one({
+            if self.db_logs:
+                await self.db_logs.insert_one({
                     "type": "user_updated", 
                     "user_id": user_id,
                     "updated_by": user_data.get("updated_by", "system"),
@@ -244,22 +249,13 @@ class UserService:
                 return {"status": "fail", "message": "Invalid user ID format"}
                 
             # Find and delete the user
-            result = self.db_users.delete_one({"_id": ObjectId(user_id)})
+            result = await self.db_users.delete_one({"_id": ObjectId(user_id)})
             
             if result.deleted_count == 0:
                 return {"status": "fail", "message": "User not found"}
                 
-            # Log the deletion if logging is enabled
-            if self.db_logs is not None:
-                self.db_logs.insert_one({
-                    "type": "user_deleted", 
-                    "user_id": user_id,
-                    "timestamp": datetime.utcnow()
-                })
-                
             return {"status": "success", "message": "User deleted successfully"}
         
         except Exception as e:
-            # Instead of logging here, propagate the exception to the route handler
             raise e
     

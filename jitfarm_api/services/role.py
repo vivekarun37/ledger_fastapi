@@ -1,8 +1,10 @@
 from bson import ObjectId
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from pymongo.errors import PyMongoError
+from jitfarm_api.models.farmModel import Role
 from datetime import datetime
 from typing import Dict, List, Any
+import json
 
 class RoleService:
     def __init__(self, db):

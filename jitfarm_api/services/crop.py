@@ -1,9 +1,10 @@
 from bson import ObjectId
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from pymongo.errors import PyMongoError
 from datetime import datetime
-from models.farmModel import Crops
+from jitfarm_api.models.farmModel import Crops
 from typing import Dict, List, Optional, Any
+import json
 
 class CropService:
     def __init__(self, db_client):

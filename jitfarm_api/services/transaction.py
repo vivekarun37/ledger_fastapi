@@ -1,8 +1,10 @@
 from bson import ObjectId
-from fastapi import HTTPException
 from pymongo.errors import PyMongoError
+from fastapi import HTTPException, status
+from jitfarm_api.models.farmModel import Transaction
 from datetime import datetime
 from typing import Dict, List, Optional, Any
+import json
 
 class TransactionService:
     def __init__(self, app):

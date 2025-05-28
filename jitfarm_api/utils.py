@@ -7,7 +7,10 @@ from bson.objectid import ObjectId
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Dict, Optional, Any
-from config import Config
+from jitfarm_api.config import Config
+
+async def get_db(request: Request):
+    return request.app.db
 
 def create_access_token(user_data: dict, expiry: timedelta = None, refresh: bool = False) -> str:
     clean_user_data = {}

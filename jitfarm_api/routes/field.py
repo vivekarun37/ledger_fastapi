@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException
-from models.farmModel import Fields
-from services.field import FieldService
+from jitfarm_api.models.farmModel import Field
+from jitfarm_api.services.field import FieldService
 from typing import Dict, List, Optional
+import json
+from jitfarm_api.utils import log_error, get_current_user, permission_required, additional_permissions_required
 
 field_router = APIRouter(prefix="", tags=['Field'])
-
-from utils import log_error,get_current_user,permission_required,additional_permissions_required
 
 def get_field_service(request: Request) -> FieldService:
     return FieldService(request.app)
@@ -13,7 +13,7 @@ def get_field_service(request: Request) -> FieldService:
 @field_router.post("/add_field")
 async def add_field(
     request: Request,
-    field: Fields,
+    field: Field,
     field_service: FieldService = Depends(get_field_service),
     user: dict = Depends(get_current_user),
     permission: bool = Depends(permission_required("Field", "create"))

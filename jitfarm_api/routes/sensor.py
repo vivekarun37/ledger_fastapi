@@ -1,8 +1,8 @@
 from wsgiref.util import application_uri
 from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException, status
-from models.farmModel import SensorData
-from models.farmModel import Field
-from models.farmModel import Form
+from jitfarm_api.models.farmModel import SensorData
+from jitfarm_api.models.farmModel import Field
+from jitfarm_api.models.farmModel import Form
 from bson import ObjectId
 from pymongo import MongoClient
 from fastapi.responses import JSONResponse
@@ -12,7 +12,7 @@ import pandas as pd
 from bson import Int64
 from pydantic import BaseModel
 from typing import Dict ,List, Optional
-from utils import log_error,permission_required,get_current_user
+from jitfarm_api.utils import log_error, permission_required, get_current_user
 
 
 

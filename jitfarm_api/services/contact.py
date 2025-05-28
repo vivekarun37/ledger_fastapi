@@ -1,9 +1,10 @@
 from bson import ObjectId
 from pymongo.errors import PyMongoError
 from fastapi import HTTPException, status
-from models.farmModel import Contacts
+from jitfarm_api.models.farmModel import Contacts
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import json
 
 class ContactService:
     def __init__(self, db_client):
