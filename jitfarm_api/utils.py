@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import traceback
 import inspect
 import logging
@@ -25,9 +25,11 @@ def create_access_token(user_data: dict, expiry: timedelta = None, refresh: bool
         else:
             clean_user_data[key] = value
     
+    now = datetime.now(timezone.utc)
     payload = {
         'user': clean_user_data,
-        'exp': datetime.now() + (expiry if expiry is not None else timedelta(minutes=60)),
+        'exp': now + (expiry if expiry is not None else timedelta(minutes=60)),
+        'iat': now,
         'jti': str(clean_user_data.get('id', ObjectId())),
         'refresh': refresh
     }
@@ -51,11 +53,14 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
             algorithms=[Config.JWT_ALGORITHM]
         )
         return token_data
+    except jwt.ExpiredSignatureError as e:
+        logging.error(f"Token expired: {str(e)}")
+        return None
     except jwt.PyJWTError as jwte:
-        logging.exception(jwte)
+        logging.error(f"JWT Error: {str(jwte)}")
         return None
     except Exception as e:
-        logging.exception(e)
+        logging.error(f"Token decode error: {str(e)}")
         return None
 
 class JWTBearer(HTTPBearer):
@@ -70,12 +75,12 @@ class JWTBearer(HTTPBearer):
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Invalid authentication scheme."
                 )
-            if not self.verify_token(credentials.credentials):
+            token_data = decode_token(credentials.credentials)
+            if not token_data:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Invalid token or expired token."
                 )
-            token_data = decode_token(credentials.credentials)
             return token_data
         else:
             raise HTTPException(
@@ -153,12 +158,12 @@ def check_permission(module: str, action: str, token_details: dict) -> bool:
     
     user_data = token_details["user"]
     
-    # Check if permissions field exists
-    if "permissions" not in user_data:
-        print(f"Permission denied: No permissions in user data")
+    # Check if role_permissions exists in user data
+    if "role_permissions" not in user_data:
+        print(f"Permission denied: No role_permissions in user data")
         return False
     
-    permissions = user_data["permissions"]
+    permissions = user_data["role_permissions"]
     
     if module not in permissions:
         print(f"Permission denied: Module '{module}' not found in permissions")
@@ -166,12 +171,11 @@ def check_permission(module: str, action: str, token_details: dict) -> bool:
     
     # Check if the action exists in the module permissions
     module_permissions = permissions[module]
-    if action not in module_permissions:
-        print(f"Permission denied: Action '{action}' not found in module '{module}'")
-        return False
+    if isinstance(module_permissions, dict) and action in module_permissions:
+        return module_permissions[action]
     
-    has_permission = module_permissions[action]
-    return has_permission
+    print(f"Permission denied: Action '{action}' not found in module '{module}'")
+    return False
 
 def permission_required(module: str, action: str):
     async def dependency(token_details: dict = Depends(JWTBearer())):
@@ -186,28 +190,27 @@ def check_additional_permissions(module: str, feature: str, action: str, token_d
     
     user_data = token_details["user"]
     
-    # Check if permissions field exists
-    if "permissions" not in user_data:
-        print(f"Permission denied: No permissions in user data")
+    # Check if role_permissions exists in user data
+    if "role_permissions" not in user_data:
+        print(f"Permission denied: No role_permissions in user data")
         return False
     
-    permissions = user_data["permissions"]
+    permissions = user_data["role_permissions"]
     
     if module not in permissions:
         return False
     
     # Check if the feature exists in the module permissions
     module_permissions = permissions[module]
-    if feature not in module_permissions:
+    if not isinstance(module_permissions, dict) or feature not in module_permissions:
         return False
     
     # Check if the action exists in the feature permissions
     feature_permissions = module_permissions[feature]
-    if action not in feature_permissions:
+    if not isinstance(feature_permissions, dict) or action not in feature_permissions:
         return False
     
-    has_permission = feature_permissions[action]
-    return has_permission
+    return feature_permissions[action]
 
 def additional_permissions_required(module: str, feature: str, action: str):
     async def dependency(token_details: dict = Depends(JWTBearer())):

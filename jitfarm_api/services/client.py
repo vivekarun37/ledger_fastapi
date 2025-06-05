@@ -18,11 +18,13 @@ class ClientService:
 
     async def add_client(self, client_data: dict):
         try:
-
-            result = self.db.clients.insert_one(client_data)
+            result = await self.db.clients.insert_one(client_data)
             client_id = str(result.inserted_id)
             
-            existing_users = list(self.db.users.find({"client_id": client_id}))
+            # Find existing users for this client
+            existing_users = []
+            async for user in self.db.users.find({"client_id": client_id}):
+                existing_users.append(user)
             
             # Only create admin user if there are no users for this client yet
             if len(existing_users) == 0:
@@ -55,7 +57,7 @@ class ClientService:
                 # Check if user was created successfully
                 if user_result.get("status") and user_result["status"] != "success":
                     # Rollback client creation if user creation fails
-                    self.db.clients.delete_one({"_id": ObjectId(client_id)})
+                    await self.db.clients.delete_one({"_id": ObjectId(client_id)})
                     raise Exception(f"Failed to create admin user: {user_result.get('message')}")
                 
                 # 3. Create admin role with full permissions
@@ -93,7 +95,19 @@ class ClientService:
                             "read": True,
                             "create": True,
                             "update": True,
-                            "delete": True
+                            "delete": True,
+                            "Status Update": {
+                                "read": True,
+                                "create": True,
+                                "update": True,
+                                "delete": True
+                            },
+                            "Cost Update": {
+                                "read": True,
+                                "create": True,
+                                "update": True,
+                                "delete": True
+                            }
                         },
                         "Users": {
                             "read": True,
@@ -118,21 +132,21 @@ class ClientService:
                     "created_dt": datetime.utcnow()
                 }
                 
-                # Add the role - don't use await here since add_role is not async
+                # Add the role - now using await since add_role is async
                 try:
-                    role_id = self.role_service.add_role(admin_role_data)
-                    self.db.roles.update_one(
+                    role_id = await self.role_service.add_role(admin_role_data)
+                    await self.db.roles.update_one(
                         {"_id": ObjectId(role_id)},
                         {"$set": {
                             "is_system_generated": True,
                         }})
                     print(f"Created role with ID: {role_id} for client ID: {client_id}")
-                    roles = self.role_service.get_role_by_id(role_id)
+                    roles = await self.role_service.get_role_by_id(role_id)
                     # 4. Assign role to user
                     if roles.get("permissions") and roles.get("name"):
                         role_permissions = roles["permissions"]
                         role_name = roles["name"]
-                    self.db.users.update_one(
+                    await self.db.users.update_one(
                         {"user_name": admin_username},
                         {
                             "$set": {
@@ -145,9 +159,9 @@ class ClientService:
                 except Exception as role_error:
                     print(f"Error creating role: {str(role_error)}")
                     # Rollback user creation if role creation fails
-                    self.db.users.delete_one({"user_name": admin_username})
+                    await self.db.users.delete_one({"user_name": admin_username})
                     # Rollback client creation
-                    self.db.clients.delete_one({"_id": ObjectId(client_id)})
+                    await self.db.clients.delete_one({"_id": ObjectId(client_id)})
                     raise Exception(f"Failed to create admin role: {str(role_error)}")
                 
                 return {
@@ -168,21 +182,21 @@ class ClientService:
             raise Exception(f"An error occurred while adding the client and setting up admin access: {str(e)}")
 
     # Rest of the methods remain unchanged
-    def get_all_clients(self):
+    async def get_all_clients(self):
         try:
-            clients = list(self.db.clients.find())
+            clients = await self.db.clients.find().to_list(length=None)
             for client in clients:
                 client["_id"] = str(client["_id"])
             return clients
         except Exception as e:
             raise Exception("An error occurred while fetching clients.") from e
 
-    def get_client_by_id(self, client_id: str):
+    async def get_client_by_id(self, client_id: str):
         try:
             if not ObjectId.is_valid(client_id):
                 raise HTTPException(status_code=400, detail="Invalid client ID format")
                 
-            client = self.db.clients.find_one({"_id": ObjectId(client_id)})
+            client = await self.db.clients.find_one({"_id": ObjectId(client_id)})
             if client is None:  # Changed from 'if not client:'
                 raise HTTPException(status_code=404, detail="Client not found")
                 
@@ -193,12 +207,12 @@ class ClientService:
         except Exception as e:
             raise Exception(f"An error occurred while fetching the client with ID {client_id}.") from e
 
-    def update_client(self, client_id: str, client):
+    async def update_client(self, client_id: str, client):
         try:
             if not ObjectId.is_valid(client_id):
                 raise HTTPException(status_code=400, detail="Invalid client ID format")
 
-            existing_client = self.db.clients.find_one({"_id": ObjectId(client_id)})
+            existing_client = await self.db.clients.find_one({"_id": ObjectId(client_id)})
             if existing_client is None:
                 raise HTTPException(status_code=404, detail="Client not found")
 
@@ -209,29 +223,29 @@ class ClientService:
                 "updated_by": client.updated_by,
             }
             
-            result = self.db.clients.update_one({"_id": ObjectId(client_id)}, {"$set": update_data})
+            result = await self.db.clients.update_one({"_id": ObjectId(client_id)}, {"$set": update_data})
             return {"message": "Client updated successfully"} if result.modified_count > 0 else {"message": "No changes made"}
         except HTTPException as e:
             raise e
         except Exception as e:
             raise Exception(f"An error occurred while updating the client with ID {client_id}.") from e
 
-    def delete_client(self, client_id: str):
+    async def delete_client(self, client_id: str):
         try:
             if not ObjectId.is_valid(client_id):
                 raise HTTPException(status_code=400, detail="Invalid client ID format")
             
-            client = self.db.clients.find_one({"_id": ObjectId(client_id)})
+            client = await self.db.clients.find_one({"_id": ObjectId(client_id)})
             if client is None:  # Changed from 'if not client:'
                 raise HTTPException(status_code=404, detail="Client not found")
             
             deletion_results = {}
             
-            user_result = self.db.users.delete_many({"client_id": client_id})
+            user_result = await self.db.users.delete_many({"client_id": client_id})
             deletion_results["users"] = user_result.deleted_count
-            role_result = self.db.roles.delete_many({"client_id": client_id})
+            role_result = await self.db.roles.delete_many({"client_id": client_id})
             deletion_results["roles"] = role_result.deleted_count
-            result = self.db.clients.delete_one({"_id": ObjectId(client_id)})
+            result = await self.db.clients.delete_one({"_id": ObjectId(client_id)})
             deletion_results["clients"] = result.deleted_count
             
             return {

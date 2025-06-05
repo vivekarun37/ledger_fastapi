@@ -12,20 +12,19 @@ async def add_client_route(request: Request, client: Clients, user: dict = Depen
     try:
         if permission:
             db = type('DB', (), {})()
-            db.clients = request.app.clients
-            db.users = request.app.users
-            db.roles = request.app.roles
+            db.clients = request.app.db.clients
+            db.users = request.app.db.users
+            db.roles = request.app.db.roles
             
             # If log collections are used in the service
-            if hasattr(request.app, 'logs'):
-                db.logs = request.app.logs
-            if hasattr(request.app, 'error_log'):
-                db.error_log = request.app.error_log
+            if hasattr(request.app.db, 'logs'):
+                db.logs = request.app.db.logs
+            if hasattr(request.app.db, 'error_log'):
+                db.error_log = request.app.db.error_log
                 
             client_service = ClientService(db)
             client_data = client.dict()
             
-            # Add await here
             result = await client_service.add_client(client_data)
             
             # Check if admin user was created
@@ -45,51 +44,64 @@ async def add_client_route(request: Request, client: Clients, user: dict = Depen
                     "admin_created": False
                 }
         else:
-            log_error(request.app, request, "Permission denied for add_client_route", None, json.dumps(client.dict(), default=str))
+            log_error(request.app.db, request, "Permission denied for add_client_route", None, client.dict())
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to add clients")
     except Exception as e:
-        log_error(request.app, request, "Error in add_client_route", e, json.dumps(client.dict(), default=str))
+        log_error(request.app.db, request, "Error in add_client_route", e, client.dict())
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
 
 @client_router.get("/get_clients")
 async def get_clients_route(request: Request, user: dict = Depends(get_current_user), permission: bool = Depends(permission_required("Clients", "read"))):
     try:
         if permission:
-            db = request.app
+            db = request.app.db
             client_service = ClientService(db)
-            return client_service.get_all_clients()
+            return await client_service.get_all_clients()
         else:
-            log_error(request.app, request, "Permission denied for get_clients_route", None)
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to get clients")
+            log_error(request.app.db, request, "Permission denied for get_clients_route", None, None)
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view clients")
     except Exception as e:
-        log_error(request.app, request, "Error in get_clients_route", e)
+        log_error(request.app.db, request, "Error in get_clients_route", e, None)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@client_router.get("/get_client/{client_id}")
+async def get_client_route(request: Request, client_id: str, user: dict = Depends(get_current_user), permission: bool = Depends(permission_required("Clients", "read"))):
+    try:
+        if permission:
+            db = request.app.db
+            client_service = ClientService(db)
+            return await client_service.get_client_by_id(client_id)
+        else:
+            log_error(request.app.db, request, f"Permission denied for get_client_route for client {client_id}", None, None)
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to view clients")
+    except Exception as e:
+        log_error(request.app.db, request, f"Error in get_client_route for client {client_id}", e, None)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @client_router.put("/update_client/{client_id}")
 async def update_client_route(request: Request, client_id: str, client: Clients, user: dict = Depends(get_current_user), permission: bool = Depends(permission_required("Clients", "update"))):
     try:
         if permission:
-            db = request.app
+            db = request.app.db
             client_service = ClientService(db)
-            return client_service.update_client(client_id, client)
+            return await client_service.update_client(client_id, client)
         else:
-            log_error(request.app, request, "Permission denied for update_client_route", None, client.dict())
+            log_error(request.app.db, request, "Permission denied for update_client_route", None, client.dict())
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to update clients")
     except Exception as e:
-        log_error(request.app, request, f"Error in update_client_route for client {client_id}", e, client.dict())
+        log_error(request.app.db, request, f"Error in update_client_route for client {client_id}", e, client.dict())
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @client_router.delete("/delete_client/{client_id}")
 async def delete_client_route(request: Request, client_id: str, user: dict = Depends(get_current_user), permission: bool = Depends(permission_required("Clients", "delete"))):
     try:
         if permission:
-            db = request.app
+            db = request.app.db
             client_service = ClientService(db)
-            return client_service.delete_client(client_id)
+            return await client_service.delete_client(client_id)
         else:
-            log_error(request.app, request, "Permission denied for delete_client_route", None, {"client_id": client_id})
+            log_error(request.app.db, request, f"Permission denied for delete_client_route for client {client_id}", None, None)
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have permission to delete clients")
     except Exception as e:
-        log_error(request.app, request, f"Error in delete_client_route for client {client_id}", e)
+        log_error(request.app.db, request, f"Error in delete_client_route for client {client_id}", e, None)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

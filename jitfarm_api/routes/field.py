@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException
-from jitfarm_api.models.farmModel import Field
+from jitfarm_api.models.farmModel import Fields
 from jitfarm_api.services.field import FieldService
 from typing import Dict, List, Optional
 import json
@@ -13,7 +13,7 @@ def get_field_service(request: Request) -> FieldService:
 @field_router.post("/add_field")
 async def add_field(
     request: Request,
-    field: Field,
+    field: Fields,
     field_service: FieldService = Depends(get_field_service),
     user: dict = Depends(get_current_user),
     permission: bool = Depends(permission_required("Field", "create"))
@@ -155,3 +155,70 @@ async def update_task_status(
         raise HTTPException(status_code=status_code, detail=error_message)
         
     return result   
+
+@field_router.put("/update_task_cost/{field_id}")
+async def update_task_cost(
+    request: Request,
+    field_id: str,
+    task_data: dict = Body(...),
+    field_service: FieldService = Depends(get_field_service),
+    user: dict = Depends(get_current_user),
+    permission: bool = Depends(permission_required("Field", "update")),
+    additional_permission: bool = Depends(additional_permissions_required("Field", "Cost Update", "update"))
+):
+    try:
+        if permission or additional_permission:
+            # Validate required fields
+            task_id = task_data.get("task_id")
+            cost = task_data.get("cost")
+            crop_id = task_data.get("crop_id")
+            description = task_data.get("description", "Fertilizer cost")
+            
+            print(f"Received task data: {json.dumps(task_data, indent=2)}")
+            print(f"Field ID: {field_id}")
+            print(f"Task ID: {task_id}")
+            print(f"Cost: {cost}")
+            print(f"Crop ID: {crop_id}")
+            
+            if not task_id:
+                raise HTTPException(status_code=400, detail="task_id must be provided")
+            if cost is None:
+                raise HTTPException(status_code=400, detail="cost must be provided")
+            if not crop_id:
+                raise HTTPException(status_code=400, detail="crop_id must be provided")
+                
+            result, exception = await field_service.update_task_cost(
+                field_id, 
+                task_id, 
+                float(cost), 
+                crop_id,
+                description,
+                user.get("user_name", "system")
+            )
+            
+            if exception:
+                status_code = 400 if isinstance(exception, ValueError) else 500
+                error_message = result.get("message", str(exception))
+                print(f"Error updating task cost: {error_message}")
+                log_error(
+                    request.app.db,
+                    request,
+                    f"Failed to update task cost for task {task_id} in field {field_id}: {error_message}",
+                    exception,
+                    str(task_data)
+                )
+                raise HTTPException(status_code=status_code, detail=error_message)
+                
+            return result
+        else:
+            error_msg = "You don't have permission to update task cost"
+            print(f"Permission denied: {error_msg}")
+            log_error(request.app.db, request, error_msg, None, str(task_data))
+            raise HTTPException(status_code=403, detail=error_msg)
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        error_msg = f"Unexpected error updating task cost for field {field_id}, task {task_data.get('task_id')}: {str(e)}"
+        print(f"Error: {error_msg}")
+        log_error(request.app.db, request, error_msg, e, str(task_data))
+        raise HTTPException(status_code=500, detail=error_msg)   

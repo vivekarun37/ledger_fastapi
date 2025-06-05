@@ -8,6 +8,6 @@ class Config:
     JWT_REFRESH_TOKEN_EXPIRE = timedelta(days=7)
     
     # MongoDB Configuration
-    MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb+srv://vivekarun6353:G7ZHTGZ77OzfeBXC@testnext.d8nktnu.mongodb.net/")
+    MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb+srv://vivekarun6353:G7ZHTGZ77OzfeBXC@testnext.d8nktnu.mongodb.net/?tlsAllowInvalidCertificates=true")
     MONGODB_DB_NAME = os.environ.get("MONGODB_DB_NAME", "npk")
    

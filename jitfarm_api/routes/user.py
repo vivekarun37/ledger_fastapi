@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Form
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jitfarm_api.models.farmModel import Users, UserLogin
 from jitfarm_api.services.user import UserService
-from jitfarm_api.utils import get_current_user, get_db
-from datetime import datetime
+from jitfarm_api.utils import get_current_user, get_db, create_access_token
+from datetime import datetime, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,14 +17,24 @@ async def login(username: str = Form(), password: str = Form(), db=Depends(get_d
         user_service = UserService(db.users, db.clients, db.logs)
         result = await user_service.authenticate_user(username, password)
         
-        if result["status"] == "fail":
+        if not result or result.get("status") != "success":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=result["message"],
+                detail="Invalid username or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        return result
+        # Generate access token
+        access_token = create_access_token(
+            user_data=result,
+            expiry=timedelta(minutes=60)
+        )
+        
+        return {
+            "status": "success",
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
         raise HTTPException(
