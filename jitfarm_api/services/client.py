@@ -121,6 +121,12 @@ class ClientService:
                             "update": True,
                             "delete": True
                         },
+                        "Reports": {
+                            "read": True,
+                            "create": False,
+                            "update": False,
+                            "delete": False
+                        },
                         "Data Addition": {
                             "read": True,
                             "create": True,

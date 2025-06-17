@@ -39,7 +39,7 @@ class TransactionService:
             if not transaction_data.get("updated_dt"):
                 transaction_data["updated_dt"] = datetime.utcnow().isoformat()
             
-            result = self.db_transactions.insert_one(transaction_data)
+            result = await self.db_transactions.insert_one(transaction_data)
             
             return {
                 "status": "success", 
