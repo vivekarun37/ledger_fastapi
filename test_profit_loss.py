@@ -186,5 +186,156 @@ def test_profit_loss():
         print("\nP&L Report (by quarter):")
         print(json.dumps(response.json(), indent=2))
 
+def create_test_accounts(client_id, auth_token):
+    accounts = [
+        {
+            "account_name": "Cash",
+            "account_code": "1000",
+            "account_type": "Asset",
+            "account_subtype": "Current Asset",
+            "description": "Cash in hand",
+            "is_active": True,
+            "is_group": False,
+            "client_id": client_id,
+            "created_by": "system",
+            "updated_by": "system"
+        },
+        {
+            "account_name": "Accounts Payable",
+            "account_code": "2000",
+            "account_type": "Liability",
+            "account_subtype": "Current Liability",
+            "description": "Money owed to suppliers",
+            "is_active": True,
+            "is_group": False,
+            "client_id": client_id,
+            "created_by": "system",
+            "updated_by": "system"
+        },
+        {
+            "account_name": "Owner's Equity",
+            "account_code": "3000",
+            "account_type": "Equity",
+            "account_subtype": "Owner's Equity",
+            "description": "Owner's capital",
+            "is_active": True,
+            "is_group": False,
+            "client_id": client_id,
+            "created_by": "system",
+            "updated_by": "system"
+        }
+    ]
+    print("\nCreating test accounts...")
+    account_ids = []
+    for acc in accounts:
+        response = requests.post(
+            f"{BASE_URL}/add_account",
+            json=acc,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {auth_token}"
+            }
+        )
+        print(f"Create account response: {response.status_code}")
+        print(response.text)
+        if response.status_code == 200:
+            result = response.json()
+            account_ids.append(result.get("id"))
+    return account_ids
+
+def create_test_ledger_entries(client_id, account_ids, auth_token):
+    # Assume account_ids order: [Asset, Liability, Equity]
+    now = datetime.now(UTC)
+    entries = [
+        {
+            "coa_id": account_ids[0],
+            "transaction_date": (now - timedelta(days=10)).isoformat(),
+            "description": "Initial cash deposit",
+            "debit_amount": 5000.0,
+            "credit_amount": 0.0,
+            "created_by": "system",
+            "is_active": True
+        },
+        {
+            "coa_id": account_ids[1],
+            "transaction_date": (now - timedelta(days=5)).isoformat(),
+            "description": "Supplier invoice",
+            "debit_amount": 0.0,
+            "credit_amount": 1200.0,
+            "created_by": "system",
+            "is_active": True
+        },
+        {
+            "coa_id": account_ids[2],
+            "transaction_date": (now - timedelta(days=2)).isoformat(),
+            "description": "Owner investment",
+            "debit_amount": 0.0,
+            "credit_amount": 3800.0,
+            "created_by": "system",
+            "is_active": True
+        }
+    ]
+    print("\nCreating test ledger entries...")
+    for entry in entries:
+        response = requests.post(
+            f"{BASE_URL}/add_ledger_entry",
+            json={**entry, "client_id": client_id},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {auth_token}"
+            }
+        )
+        print(f"Create ledger entry response: {response.status_code}")
+        print(response.text)
+
+def test_balance_sheet():
+    # Step 1: Login as superadmin
+    superadmin_token = login_superadmin()
+    if not superadmin_token:
+        print("Failed to login as superadmin")
+        return
+    # Step 2: Create a test client
+    client_info = create_test_client(superadmin_token)
+    if not client_info:
+        print("Failed to create test client")
+        return
+    # Step 3: Login as the client admin
+    token = login_client_admin(client_info["admin_username"])
+    if not token:
+        print("Failed to get authentication token")
+        return
+    # Step 4: Create test accounts
+    account_ids = create_test_accounts(client_info["client_id"], token)
+    if not account_ids or len(account_ids) < 3:
+        print("Failed to create test accounts")
+        return
+    # Step 5: Create test ledger entries
+    create_test_ledger_entries(client_info["client_id"], account_ids, token)
+    auth_headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
+    # Step 6: Get Balance Sheet report for current month
+    print("\nGetting Balance Sheet report for current month...")
+    response = requests.get(
+        f"{BASE_URL}/balance_sheet?client_id={client_info['client_id']}",
+        headers=auth_headers
+    )
+    print(f"Balance Sheet report response: {response.status_code}")
+    if response.status_code == 200:
+        print("\nBalance Sheet Report:")
+        print(json.dumps(response.json(), indent=2))
+    # Step 7: Get Balance Sheet report consolidated
+    print("\nGetting Balance Sheet report (consolidated)...")
+    response = requests.get(
+        f"{BASE_URL}/balance_sheet?client_id={client_info['client_id']}&consolidate=true",
+        headers=auth_headers
+    )
+    print(f"Balance Sheet report response: {response.status_code}")
+    if response.status_code == 200:
+        print("\nBalance Sheet Report (consolidated):")
+        print(json.dumps(response.json(), indent=2))
+
 if __name__ == "__main__":
-    test_profit_loss() 
+    test_profit_loss()
+    test_balance_sheet() 
