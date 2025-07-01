@@ -200,3 +200,12 @@ class Transaction(BaseModel):
     created_dt: str = Field(default_factory=datetime.utcnow)
     updated_by: str
     updated_dt: str = Field(default_factory=datetime.utcnow)
+
+class TransactionType(BaseModel):
+    client_id: str
+    name: str  # Transaction Type Name
+    description: Optional[str] = None
+    created_by: str
+    created_dt: str = Field(default_factory=datetime.utcnow)
+    updated_by: str
+    updated_dt: str = Field(default_factory=datetime.utcnow)

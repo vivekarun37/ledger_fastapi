@@ -2,7 +2,7 @@ import requests
 import json
 from datetime import datetime, timedelta, UTC
 
-BASE_URL = "http://localhost:8006"
+BASE_URL = "http://localhost:8056"
 
 def login_superadmin():
     login_data = {
@@ -336,6 +336,58 @@ def test_balance_sheet():
         print("\nBalance Sheet Report (consolidated):")
         print(json.dumps(response.json(), indent=2))
 
+def test_transaction_types():
+    superadmin_token = login_superadmin()
+    if not superadmin_token:
+        print("Failed to login as superadmin")
+        return
+    client_info = create_test_client(superadmin_token)
+    if not client_info:
+        print("Failed to create test client")
+        return
+    token = login_client_admin(client_info["admin_username"])
+    if not token:
+        print("Failed to get authentication token")
+        return
+    auth_headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
+    transactions = [
+        {
+            "client_id": client_info["client_id"],
+            "transaction_type": "income",
+            "amount": 1234.56,
+            "date": datetime.now(UTC).isoformat(),
+            "payee": "Test Payee",
+            "category": "Test Income",
+            "description": "Test income transaction",
+            "created_by": "system",
+            "updated_by": "system"
+        },
+        {
+            "client_id": client_info["client_id"],
+            "transaction_type": "expense",
+            "amount": 654.32,
+            "date": datetime.now(UTC).isoformat(),
+            "payee": "Test Payee",
+            "category": "Test Expense",
+            "description": "Test expense transaction",
+            "created_by": "system",
+            "updated_by": "system"
+        }
+    ]
+    print("\nTesting /add_transaction endpoint for income and expense...")
+    for tx in transactions:
+        response = requests.post(
+            f"{BASE_URL}/add_transaction",
+            json=tx,
+            headers=auth_headers
+        )
+        print(f"Add transaction ({tx['transaction_type']}) response: {response.status_code}")
+        print(response.json())
+
 if __name__ == "__main__":
     test_profit_loss()
-    test_balance_sheet() 
+    test_balance_sheet()
+    test_transaction_types() 

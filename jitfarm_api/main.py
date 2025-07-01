@@ -17,6 +17,7 @@ from jitfarm_api.routes.coa import coa_router
 from jitfarm_api.routes.transaction import transaction_router
 from jitfarm_api.routes.ledger import ledger_router
 from jitfarm_api.routes.reports import reports_router
+from jitfarm_api.routes.transaction_type import transaction_type_router
 from jitfarm_api.config import Config
 import logging
 
@@ -113,6 +114,7 @@ app.include_router(coa_router)
 app.include_router(transaction_router)
 app.include_router(ledger_router)
 app.include_router(reports_router)
+app.include_router(transaction_type_router)
 
 @app.get("/")
 async def root():
