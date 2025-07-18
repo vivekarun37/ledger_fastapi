@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Form, Request, Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jitfarm_api.models.farmModel import Users, UserLogin
 from jitfarm_api.services.user import UserService
@@ -131,3 +131,14 @@ async def delete_user(user_id: str, current_user=Depends(get_current_user), db=D
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         ) 
+
+@user_router.post("/api/getusers")
+async def api_get_users(request: Request, data: dict = Body(...), current_user=Depends(get_current_user), db=Depends(get_db)):
+    client_id = data.get("client_id")
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id is required")
+    user_service = UserService(db.users, db.clients, db.logs)
+    result = await user_service.get_users_by_client(client_id)
+    if result["status"] == "fail":
+        raise HTTPException(status_code=404, detail=result["message"])
+    return result 
