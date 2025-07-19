@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException, status, Body, Depends, Query
-from jitfarm_api.models.farmModel import Role
-from jitfarm_api.services.role import RoleService
-from jitfarm_api.utils import log_error, get_current_user, permission_required
+from models.farmModel import Role
+from services.role import RoleService
+from utils import log_error, get_current_user, permission_required
 from typing import Dict, Any, Optional
 import json
 

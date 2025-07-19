@@ -7,7 +7,7 @@ from bson.objectid import ObjectId
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Dict, Optional, Any
-from jitfarm_api.config import Config
+from config import Config
 
 async def get_db(request: Request):
     return request.app.db

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException, status
-from jitfarm_api.models.farmModel import COAccount  # This should likely be renamed to match new naming
-from jitfarm_api.services.coa import COAccountService
-from jitfarm_api.utils import log_error, permission_required, get_current_user, additional_permissions_required
+from models.farmModel import COAccount  # This should likely be renamed to match new naming
+from services.coa import COAccountService
+from utils import log_error, permission_required, get_current_user, additional_permissions_required
 from typing import Dict, List, Optional
 from datetime import datetime
 

@@ -1,4 +1,4 @@
-fastapi==0.115.0
+fastapi==0.104.1
 fastapi_jwt_auth==0.5.0
 SQLAlchemy>=2.0.16
 passlib==1.7.4
@@ -7,7 +7,8 @@ psycopg2
 postgres
 requests
 pymongo
-pydantic==1.10.11
+motor
+pydantic>=2.0.0
 pandas
 bcrypt
 pyjwt[crypto]

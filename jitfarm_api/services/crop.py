@@ -2,7 +2,7 @@ from bson import ObjectId
 from fastapi import HTTPException, status
 from pymongo.errors import PyMongoError
 from datetime import datetime
-from jitfarm_api.models.farmModel import Crops
+from models.farmModel import Crops
 from typing import Dict, List, Optional, Any
 import json
 

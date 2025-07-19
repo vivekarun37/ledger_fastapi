@@ -1,7 +1,7 @@
 from bson import ObjectId
 from pymongo.errors import PyMongoError
 from fastapi import HTTPException, status
-from jitfarm_api.models.farmModel import Contacts
+from models.farmModel import Contacts
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import json

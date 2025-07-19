@@ -5,11 +5,11 @@ from bson import ObjectId
 import traceback
 import inspect
 from datetime import datetime
-from jitfarm_api.utils import create_access_token, decode_token
+from utils import create_access_token, decode_token
 from datetime import timedelta
 import hashlib
 from pymongo.errors import PyMongoError
-from jitfarm_api.models.farmModel import Users
+from models.farmModel import Users
 from motor.motor_asyncio import AsyncIOMotorCollection
 import json
 import logging
@@ -69,7 +69,15 @@ class UserService:
             if not isinstance(role_permissions, dict):
                 role_permissions = {}
 
-            # Return user data
+            # Create access token
+            user_data_for_token = {
+                "user_name": found_user["user_name"],
+                "client_id": str(client_id) if client_id else None,
+                "role_permissions": role_permissions
+            }
+            access_token = create_access_token(user_data_for_token)
+            
+            # Return user data with access token
             return {
                 "status": "success",
                 "user_name": found_user["user_name"],
@@ -77,7 +85,8 @@ class UserService:
                 "client_name": client_name,
                 "client_code": client_code,
                 "role_name": role_name,
-                "role_permissions": role_permissions
+                "role_permissions": role_permissions,
+                "access_token": access_token
             }
         except Exception as e:
             logger.error(f"Error in authenticate_user: {str(e)}")

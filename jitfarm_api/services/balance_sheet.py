@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
-from jitfarm_api.models.farmModel import COAccount
-from jitfarm_api.models.ledgerModel import LedgerEntry
+from models.farmModel import COAccount
+from models.ledgerModel import LedgerEntry
 from fastapi import HTTPException
 from bson import ObjectId
 

@@ -2,7 +2,7 @@ from bson import ObjectId
 from fastapi import HTTPException, status
 from pymongo.errors import PyMongoError
 from datetime import datetime
-from jitfarm_api.models.farmModel import TransactionType
+from models.farmModel import TransactionType
 from typing import Dict, List, Optional, Any
 
 class TransactionTypeService:

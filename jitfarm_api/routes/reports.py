@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Request, Query, HTTPException
 from datetime import datetime
 from typing import Optional
-from jitfarm_api.services.profit_loss import ProfitLossService
-from jitfarm_api.services.balance_sheet import BalanceSheetService
-from jitfarm_api.utils import get_current_user, permission_required, log_error
+from services.profit_loss import ProfitLossService
+from services.balance_sheet import BalanceSheetService
+from utils import get_current_user, permission_required, log_error
 
 reports_router = APIRouter(prefix="", tags=['Reports'])
 

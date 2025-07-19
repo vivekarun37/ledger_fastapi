@@ -2,19 +2,19 @@ import requests
 import json
 from datetime import datetime, timedelta, UTC
 
-BASE_URL = "http://localhost:8056"
+BASE_URL = "http://localhost:8006"
 
 def login_superadmin():
     login_data = {
-        "username": "admin",
+        "user_name": "admin",
         "password": "admin123"
     }
     
     print("Logging in as superadmin...")
     response = requests.post(
         f"{BASE_URL}/user/login",
-        data=login_data,
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
+        json=login_data,
+        headers={"Content-Type": "application/json"}
     )
     print(f"Login response: {response.status_code}")
     if response.status_code == 200:
@@ -58,15 +58,15 @@ def create_test_client(auth_token):
 
 def login_client_admin(username):
     login_data = {
-        "username": username,
+        "user_name": username,
         "password": "password"  # Default password for system-generated admin users
     }
     
     print("\nLogging in as client admin...")
     response = requests.post(
         f"{BASE_URL}/user/login",
-        data=login_data,
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
+        json=login_data,
+        headers={"Content-Type": "application/json"}
     )
     print(f"Login response: {response.status_code}")
     if response.status_code == 200:
@@ -278,7 +278,7 @@ def create_test_ledger_entries(client_id, account_ids, auth_token):
     print("\nCreating test ledger entries...")
     for entry in entries:
         response = requests.post(
-            f"{BASE_URL}/add_ledger_entry",
+            f"{BASE_URL}/ledger/add_ledger_entry",
             json={**entry, "client_id": client_id},
             headers={
                 "Content-Type": "application/json",

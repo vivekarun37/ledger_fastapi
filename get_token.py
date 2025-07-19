@@ -2,7 +2,7 @@ import requests
 import json
 
 # Configuration
-BASE_URL = "http://localhost:8023"  # Update this if your server runs on a different port
+BASE_URL = "http://localhost:8006"  # Update this if your server runs on a different port
 HEADERS = {
     "Content-Type": "application/json"
 }

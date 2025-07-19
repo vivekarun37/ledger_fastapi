@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request, HTTPException, Query
-from jitfarm_api.models.ledgerModel import LedgerEntry, LedgerUpdate
-from jitfarm_api.utils import log_error, get_current_user, permission_required, additional_permissions_required
-from jitfarm_api.services.ledger import LedgerService
+from models.ledgerModel import LedgerEntry, LedgerUpdate
+from utils import log_error, get_current_user, permission_required, additional_permissions_required
+from services.ledger import LedgerService
 from typing import List, Dict, Optional
 import logging
 
@@ -113,4 +113,30 @@ async def get_ledger_balance(
     if not permission:
         raise HTTPException(status_code=403, detail="Permission denied")
     
-    return await ledger_service.get_ledger_balance(coa_id) 
+    return await ledger_service.get_ledger_balance(coa_id)
+
+@ledger_router.post("/add_ledger_entry", response_model=Dict)
+async def add_ledger_entry(
+    request: Request,
+    entry: LedgerEntry,
+    ledger_service: LedgerService = Depends(get_ledger_service),
+    current_user: dict = Depends(get_current_user),
+    permission: bool = Depends(permission_required("Ledger", "create"))
+):
+    """Create a new ledger entry (alternative endpoint for compatibility)"""
+    try:
+        if not permission:
+            raise HTTPException(status_code=403, detail="Permission denied")
+        
+        # Set the created_by field from the current user
+        entry.created_by = current_user.get("user_name", "admin")
+        
+        logger.info(f"Creating ledger entry: {entry.dict()}")
+        result = await ledger_service.create_ledger_entry(entry)
+        logger.info(f"Ledger entry created: {result}")
+        return result
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error in add_ledger_entry: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating ledger entry: {str(e)}") 

@@ -4,7 +4,7 @@ from bson import ObjectId
 from pymongo.errors import PyMongoError
 import json
 from fastapi import HTTPException
-from jitfarm_api.utils import log_error
+from utils import log_error
 
 class ProfitLossService:
     def __init__(self, db_client):

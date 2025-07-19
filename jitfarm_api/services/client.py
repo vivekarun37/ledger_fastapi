@@ -1,9 +1,9 @@
 from pymongo import MongoClient
-from jitfarm_api.models.farmModel import Clients, Users
+from models.farmModel import Clients, Users
 from bson import ObjectId
 from fastapi import HTTPException, status
-from jitfarm_api.services.user import UserService
-from jitfarm_api.services.role import RoleService
+from services.user import UserService
+from services.role import RoleService
 from datetime import datetime
 from pymongo.errors import PyMongoError
 import json

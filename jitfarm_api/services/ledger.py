@@ -1,7 +1,7 @@
 from datetime import datetime, UTC
 from bson import ObjectId
 from typing import Dict, List, Optional
-from jitfarm_api.models.ledgerModel import LedgerEntry, LedgerUpdate
+from models.ledgerModel import LedgerEntry, LedgerUpdate
 from motor.motor_asyncio import AsyncIOMotorCollection
 from fastapi import HTTPException
 import logging

@@ -1,144 +1,280 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form, Request, Body
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jitfarm_api.models.farmModel import Users, UserLogin
-from jitfarm_api.services.user import UserService
-from jitfarm_api.utils import get_current_user, get_db, create_access_token
+import bcrypt
+from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException, status
+from models.farmModel import Users, UserLogin
+from bson import ObjectId
+from pymongo import MongoClient
+from fastapi.responses import JSONResponse
+from pymongo.errors import PyMongoError
 from datetime import datetime, timedelta
-import logging
+from typing import Dict, List, Optional
+from services.user import UserService
+import json
+from utils import log_error, get_current_user, permission_required
 
-logger = logging.getLogger(__name__)
-user_router = APIRouter()
+user_router = APIRouter(prefix="", tags=['User'])
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+def get_user_service(request: Request) -> UserService:
+    db_users = request.app.users
+    db_clients = request.app.clients
+    db_logs = request.app.logs if hasattr(request.app, 'logs') else None
+    db_error_log = request.app.error_log if hasattr(request.app, 'error_log') else None
+    
+    return UserService(db_users, db_clients, db_logs, db_error_log)
 
-@user_router.post("/login")
-async def login(username: str = Form(), password: str = Form(), db=Depends(get_db)):
+@user_router.post("/getusers",summary="User Login")
+async def get_users(request: Request, data: UserLogin):
+    user_service = get_user_service(request)
+    user_name = data.user_name
+    password = data.password
+    
+    if not user_name or not password:
+        raise HTTPException(status_code=400, detail="Username and password are required")
+    
     try:
-        user_service = UserService(db.users, db.clients, db.logs)
-        result = await user_service.authenticate_user(username, password)
+        result = await user_service.authenticate_user(user_name, password)
         
-        if not result or result.get("status") != "success":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid username or password",
-                headers={"WWW-Authenticate": "Bearer"},
+        if result.get("status") == "fail":
+            return JSONResponse(
+                content=result,
+                status_code=401 if "Invalid username or password" in result.get("message", "") else 400
             )
         
-        # Generate access token
-        access_token = create_access_token(
-            user_data=result,
-            expiry=timedelta(minutes=60)
+        return JSONResponse(content=result)
+    except Exception as e:
+        db = request.app.state.db if hasattr(request.app.state, 'db') else None
+        log_error(
+            db=db,
+            request=request,
+            error_message="Error during user authentication",
+            exception=e,
+            payload=json.dumps({"user_name": user_name})  # Don't include password in logs
         )
         
-        return {
-            "status": "success",
-            "access_token": access_token,
-            "token_type": "bearer"
+        return JSONResponse(
+            content={"status": "error", "message": "Authentication error occurred"},
+            status_code=500
+        )
+
+@user_router.post("/login", summary="User Login")
+async def login(request: Request, data: UserLogin):
+    user_service = get_user_service(request)
+    user_name = data.user_name
+    password = data.password
+    
+    if not user_name or not password:
+        raise HTTPException(status_code=400, detail="Username and password are required")
+    
+    try:
+        result = await user_service.authenticate_user(user_name, password)
+        
+        if result.get("status") == "fail":
+            return JSONResponse(
+                content=result,
+                status_code=401 if "Invalid username or password" in result.get("message", "") else 400
+            )
+        
+        return JSONResponse(content=result)
+    except Exception as e:
+        db = request.app.state.db if hasattr(request.app.state, 'db') else None
+        log_error(
+            db=db,
+            request=request,
+            error_message="Error during user authentication",
+            exception=e,
+            payload=json.dumps({"user_name": user_name})  # Don't include password in logs
+        )
+        
+        return JSONResponse(
+            content={"status": "error", "message": "Authentication error occurred"},
+            status_code=500
+        )
+
+@user_router.post("/adduser")
+async def add_user(request: Request, user: Users,
+ user_service: UserService = Depends(get_user_service),
+ users: dict = Depends(get_current_user),
+ permission: bool = Depends(permission_required("Users", "create"))):
+
+    try:
+        if permission:
+            result = await user_service.add_user(user)
+            if result.get("status") == "fail":
+                return JSONResponse(
+                    content=result,
+                    status_code=400
+                )
+            
+            return JSONResponse(
+                content=result,
+                status_code=201
+            )
+        else:
+            log_error(
+                request.app,
+                request,
+                error_message="Permission denied for add_user",
+                exception=None,
+                payload=json.dumps(user.dict())
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to add users"
+            )
+    except Exception as e:
+        db = request.app.state.db if hasattr(request.app.state, 'db') else None
+        safe_payload = {
+            "user_name": user.user_name,
+            "client_id": user.client_id,
         }
-    except Exception as e:
-        logger.error(f"Login error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        
+        log_error(
+            request.app,
+            request,
+            error_message="Error adding new user",
+            exception=e,
+            payload=json.dumps(safe_payload)
+        )
+        
+        return JSONResponse(
+            content={"status": "error", "message": "Error occurred while adding user"},
+            status_code=500
         )
 
-@user_router.post("/users")
-async def add_user(user_data: Users, current_user=Depends(get_current_user), db=Depends(get_db)):
-    try:
-        # Set creation metadata
-        user_data.created_by = current_user["user_name"]
-        user_data.created_dt = datetime.utcnow()
-        user_data.updated_by = current_user["user_name"]
-        user_data.updated_dt = datetime.utcnow()
-        
-        user_service = UserService(db.users, db.clients, db.logs)
-        result = await user_service.add_user(user_data)
-        
-        if result["status"] == "fail":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result["message"]
+@user_router.get("/get_users_by_client/{client_id}")
+async def get_users_by_client_get(request: Request, client_id: str, user_service: UserService = Depends(get_user_service),
+ user: dict = Depends(get_current_user), permission: bool = Depends(permission_required("Users", "read"))):
+    
+    try:     
+        if permission:                   
+            result = await user_service.get_users_by_client(client_id)
+            if result.get("status") == "fail":
+                return JSONResponse(
+                    content=result,
+                    status_code=400
+                )
+            
+            # Convert datetime objects to ISO format strings
+            if "users" in result:
+                for user in result["users"]:
+                    if "created_dt" in user and isinstance(user["created_dt"], datetime):
+                        user["created_dt"] = user["created_dt"].isoformat()
+                    if "updated_dt" in user and isinstance(user["updated_dt"], datetime):
+                        user["updated_dt"] = user["updated_dt"].isoformat()
+            
+            return JSONResponse(content=result)
+        else:
+            log_error(
+                request.app,
+                request,
+                error_message="Permission denied for get_users_by_client",
+                exception=None,
+                payload=json.dumps({"client_id": client_id})
             )
-        
-        return result
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to view users"
+            )
     except Exception as e:
-        logger.error(f"Add user error: {str(e)}")
+        # Using the format you provided
+        log_error(
+            request.app, 
+            request, 
+            "Error fetching users by client", 
+            e, 
+            json.dumps({"client_id": client_id})
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail="An unexpected error occurred"
         )
 
-@user_router.get("/users/{client_id}")
-async def get_users(client_id: str, current_user=Depends(get_current_user), db=Depends(get_db)):
+@user_router.put("/update_user/{user_id}")
+async def update_user(request: Request, user_id: str, 
+user_data: dict = Body(...),
+ user_service: UserService = Depends(get_user_service),
+ user: dict = Depends(get_current_user), permission: bool = Depends(permission_required("Users", "update"))):
+    
     try:
-        user_service = UserService(db.users, db.clients, db.logs)
-        result = await user_service.get_users_by_client(client_id)
-        
-        if result["status"] == "fail":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=result["message"]
+        if permission:
+            result = await user_service.update_user(user_id, user_data)
+            
+            if result.get("status") == "fail":
+                return JSONResponse(
+                    content=result,
+                    status_code=400
+                )
+            
+            return JSONResponse(content=result)
+        else:
+            log_error(
+                request.app,
+                request,
+                error_message="Permission denied for update_user",
+                exception=None,
+                payload=json.dumps({"user_id": user_id, **user_data})
             )
-        
-        return result
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to update users"
+            )
     except Exception as e:
-        logger.error(f"Get users error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        safe_data = {k: v for k, v in user_data.items() if k != "password"}
+        
+        db = request.app.state.db if hasattr(request.app.state, 'db') else None
+        log_error(
+            db=db,
+            request=request,
+            error_message="Error updating user",
+            exception=e,
+            payload=json.dumps({"user_id": user_id, **safe_data})
+        )
+        
+        return JSONResponse(
+            content={"status": "error", "message": "Error occurred while updating user"},
+            status_code=500
         )
 
-@user_router.put("/users/{user_id}")
-async def update_user(user_id: str, user_data: dict, current_user=Depends(get_current_user), db=Depends(get_db)):
+@user_router.delete("/delete_user")
+async def delete_user(request: Request, user_id: str = Query(...),
+ user_service: UserService = Depends(get_user_service),
+ user: dict = Depends(get_current_user), permission: bool = Depends(permission_required("Users", "delete"))):
+
+    
     try:
-        # Set update metadata
-        user_data["updated_by"] = current_user["user_name"]
-        user_data["updated_dt"] = datetime.utcnow()
-        
-        user_service = UserService(db.users, db.clients, db.logs)
-        result = await user_service.update_user(user_id, user_data)
-        
-        if result["status"] == "fail":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result["message"]
+        if permission:
+            result = await user_service.delete_user(user_id)
+            
+            if result.get("status") == "fail":
+                return JSONResponse(
+                    content=result,
+                    status_code=400
+                )
+            
+            return JSONResponse(content=result)
+        else:
+            log_error(
+                request.app,
+                request,
+                error_message="Permission denied for delete_user",
+                exception=None,
+                payload=json.dumps({"user_id": user_id})
             )
-        
-        return result
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to delete users"
+            )
     except Exception as e:
-        logger.error(f"Update user error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+        db = request.app.state.db if hasattr(request.app.state, 'db') else None
+        log_error(
+            db=db,
+            request=request,
+            error_message="Error deleting user",
+            exception=e,
+            payload=json.dumps({"user_id": user_id})
         )
-
-@user_router.delete("/users/{user_id}")
-async def delete_user(user_id: str, current_user=Depends(get_current_user), db=Depends(get_db)):
-    try:
-        user_service = UserService(db.users, db.clients, db.logs)
-        result = await user_service.delete_user(user_id)
         
-        if result["status"] == "fail":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=result["message"]
-            )
-        
-        return result
-    except Exception as e:
-        logger.error(f"Delete user error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        ) 
-
-@user_router.post("/api/getusers")
-async def api_get_users(request: Request, data: dict = Body(...), current_user=Depends(get_current_user), db=Depends(get_db)):
-    client_id = data.get("client_id")
-    if not client_id:
-        raise HTTPException(status_code=400, detail="client_id is required")
-    user_service = UserService(db.users, db.clients, db.logs)
-    result = await user_service.get_users_by_client(client_id)
-    if result["status"] == "fail":
-        raise HTTPException(status_code=404, detail=result["message"])
-    return result 
+        return JSONResponse(
+            content={"status": "error", "message": "Error occurred while deleting user"},
+            status_code=500
+        )

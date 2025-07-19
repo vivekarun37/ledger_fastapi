@@ -1,7 +1,7 @@
 from bson import ObjectId
 from pymongo.errors import PyMongoError
 from fastapi import HTTPException, status
-from jitfarm_api.models.farmModel import CustomField, FieldTemplate
+from models.farmModel import CustomField, FieldTemplate
 from datetime import datetime
 import json
 from typing import List, Dict, Any, Optional

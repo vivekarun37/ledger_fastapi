@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request, Body, HTTPException, status
-from jitfarm_api.models.farmModel import TransactionType
-from jitfarm_api.services.transaction_type import TransactionTypeService
-from jitfarm_api.utils import log_error, permission_required, get_current_user, additional_permissions_required
+from models.farmModel import TransactionType
+from services.transaction_type import TransactionTypeService
+from utils import log_error, permission_required, get_current_user, additional_permissions_required
 from typing import Dict, List
 
 transaction_type_router = APIRouter(prefix="", tags=['TransactionType'])

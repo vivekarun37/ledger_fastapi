@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Request, Body, Query, HTTPException
-from jitfarm_api.models.farmModel import Fields
-from jitfarm_api.services.field import FieldService
+from models.farmModel import Fields
+from services.field import FieldService
 from typing import Dict, List, Optional
 import json
-from jitfarm_api.utils import log_error, get_current_user, permission_required, additional_permissions_required
+from utils import log_error, get_current_user, permission_required, additional_permissions_required
 
 field_router = APIRouter(prefix="", tags=['Field'])
 
